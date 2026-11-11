@@ -26,30 +26,48 @@ votes that exiled a (now revealed) villager raise a player's score, votes
 that exiled a werewolf lower it, defending a revealed werewolf in speech
 raises it, accusation pressure and late-game silence add a little, and
 competing seer claims mark both claimants. Seer claims and their reported
-checks are parsed out of speeches, so a lone credible claim steers the
-whole village side.
+checks are parsed out of speeches and then **graded against the revealed
+roles**: a claimant whose announced check is proven false is a caught
+werewolf (a real seer is never wrong), a claimant whose named werewolf
+died a werewolf is confirmed, and only a credible claimant's results
+steer the village side. Dead werewolves still inform — their accusations
+lean village, their defences lean wolf.
+
+Village votes also **coordinate on the tally**: votes are public and
+sequential, so when a plausible suspect already leads today's count the
+vote joins it instead of splitting the village into a tie that exiles
+nobody and gifts the wolves a free night.
 
 * **Werewolf** — the second wolf to act at night matches its partner's
   pick, because a kill only lands when every wolf who named someone named
   the same seat. The first wolf targets a claimed seer, a proven
   wolf-catcher, or a talkative village leader — never the player the
   village is about to exile anyway. By day it rides the village's own
-  suspicion and vote momentum, votes out a seer who named it, buses a
-  partner the seer named once the bandwagon is unstoppable, and — when
-  cornered — counter-claims seer with a fabricated record whose "clears"
-  are real non-werewolves and whose story is re-derived from its own past
-  speeches, so it never contradicts itself.
+  suspicion and vote momentum, votes out a seer who named it, and buses a
+  partner the seer named once the bandwagon is unstoppable. If no seer has
+  claimed by day 2 it **claims first** with a fabricated record — in the
+  usual line (two night kills and a day-1 exile) the exile that claim
+  produces reaches parity and wins before the lie can be punished. It
+  distances from a partner the table has already turned on, counter-claims
+  the real seer late when its partner is named, and — when cornered —
+  claims with a record whose "clears" are real non-werewolves and whose
+  story is re-derived from its own past speeches, so it never contradicts
+  itself.
 * **Seer** — inspects the most suspicious uninspected player (a rival
   claimant first). It reveals the morning after finding a werewolf,
   counter-claims a fake immediately, defends players it has cleared when
-  they come under fire, and reveals with its clear list on day 3 to shrink
-  the suspect pool.
-* **Doctor** — protects the lone claimed seer, else the most trusted
-  active villager; never claims, and plays the day exactly like a villager.
-* **Villager** — backs a lone seer claim's named werewolf, votes out a
-  claimant who names *them* (a real seer would not be wrong about their
-  own team), picks between counter-claimants, and otherwise votes the
-  suspicion leader with a public, vote-based reason.
+  they come under fire, republishes its full record each day once out,
+  reveals under exile pressure rather than dying silent, and reveals with
+  its clear list on day 3 to shrink the suspect pool.
+* **Doctor** — protects the credible claimed seer, their clears and
+  proven wolf-catchers, else the most trusted active villager; never
+  claims, and plays the day exactly like a villager.
+* **Villager** — backs a credible seer claim's named werewolf, votes out
+  a claimant who names *them* (a real seer would not be wrong about their
+  own team) or one whose claim is proven false, picks between
+  counter-claimants by the strength of their stories, and otherwise votes
+  the suspicion leader, coordinated on the tally, with a public,
+  vote-based reason.
 
 Speeches are short templates filled from the game state — claims,
 accusations with reasons, defences, vote commitments — always folded to
