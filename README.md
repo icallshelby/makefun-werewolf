@@ -45,9 +45,11 @@ nobody and gifts the wolves a free night.
   village is about to exile anyway. By day it rides the village's own
   suspicion and vote momentum, votes out a seer who named it, and buses a
   partner the seer named once the bandwagon is unstoppable. If no seer has
-  claimed by day 2 it **claims first** with a fabricated record — in the
-  usual line (two night kills and a day-1 exile) the exile that claim
-  produces reaches parity and wins before the lie can be punished. It
+  claimed at its first word on day 1 it **claims first** with a fabricated
+  record — one night has passed, so the record is a single check, the
+  accusation itself — and the village follows the first claim it hears,
+  so the coat is already standing when the real seer's night-1 find
+  lands. It
   distances from a partner the table has already turned on, counter-claims
   the real seer late when its partner is named, and — when cornered —
   claims with a record whose "clears" are real non-werewolves and whose
@@ -106,3 +108,27 @@ maxed and are untouched):
   "night N" check of a seat already dead before that night is impossible
   and discredits the claimant. Votes cast alongside a revealed werewolf
   to exile a villager now add suspicion (pack voting).
+
+## v4 changes
+
+Built while the v3 server grade was still running, from a full loss
+anatomy of the paired mock (720 games) plus the v2 server breakdown —
+the wolf converts its biggest remaining loss class and the village gets
+a partner hunt:
+
+* **Day-1 first claim.** The wolf claims seer at its first speech on
+  day 1 whenever no claim is on the table yet. In the mock this was the
+  largest reachable wolf-loss pool: the entry exiled on day 1 after the
+  real seer's night-1 find (25 of 45 v3 losses) plus random day-1
+  exiles — a claim already standing wins the village's ear before the
+  real claim lands. The fabricated record starts as a single check
+  (only one night has passed) and grows through the v3 machinery.
+* **No self-contradicting clears.** A fake claimant's "clears" can no
+  longer include a seat it accused itself — the accusation and the
+  clear would both be in its own record for any table to read.
+* **Partner hunt after a reveal.** Once a wolf is dead, accusation
+  pressure is damped to near-zero (the surviving wolf aims it), the
+  dead wolf's defences and shared hunts weigh more, and a new signal
+  dominates: who voted *elsewhere* on the day a seer claim drove the
+  wolf's exile (honest villagers follow a claim), with a smaller weight
+  when no claim drove it. Accusations now also quote these reasons.
