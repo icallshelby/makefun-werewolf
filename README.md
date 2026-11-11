@@ -82,3 +82,27 @@ complete, playable entry. Beating the prize gate — a Claude Opus baseline
 asked plainly — at a social-deduction game against seven LLM players is
 not realistic for a scripted agent; see `BUILD-REPORT.md` for the local
 mock results and the full assessment.
+
+## v3 changes
+
+The werewolf side was rebuilt around what the v2 server grade exposed
+(wolf play was the weakest component by far; seer and doctor were already
+maxed and are untouched):
+
+* **Lone-wolf seer claim.** The day-2 first claim no longer requires the
+  partner to be alive: with the partner exiled, the surviving wolf takes
+  the seer's coat and steers the exiles itself.
+* **A working fake record.** A fake claimant whose accused seat dies
+  brings a fresh "last night I checked" result the next day instead of
+  repeating a dead accusation, grows a living clear into the record from
+  day 3, never accuses a seat it has cleared, and votes its own call.
+* **Counter-claims name the rival.** A wolf named by a seer claim
+  counter-claims with its fabricated check on the claimant themselves.
+* **Repeat a blocked kill.** A kill the doctor stopped is repeated the
+  next night — the doctor cannot guard the same seat twice running.
+  Story consistency at night: the wolf never kills its own claimed
+  clears or its accused (the accused must face the vote, not the knife).
+* **Village inference.** Claims are also graded on the timeline: a
+  "night N" check of a seat already dead before that night is impossible
+  and discredits the claimant. Votes cast alongside a revealed werewolf
+  to exile a villager now add suspicion (pack voting).

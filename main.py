@@ -212,6 +212,7 @@ class GameState:
         self.seer_claims = {}
         self.claim_events = []
         self.claim_first_day = {}
+        self.claim_night_checks = []  # (claimant, night, checked seat)
         self.doctor_claimants = set()
         for (_day, seat, text) in self.speeches:
             if SEER_CLAIM_RE.search(text):
@@ -230,6 +231,16 @@ class GameState:
                         if tgt not in rec["clear"]:
                             rec["clear"].add(tgt)
                             self.claim_events.append((_day, seat, tgt, "clear"))
+                for m in re.finditer(
+                        r"night\s*(\d+)[^.;]*?checked\s+seat\s*(\d+)",
+                        text, re.I):
+                    self.claim_night_checks.append(
+                        (seat, int(m.group(1)), int(m.group(2))))
+                for m in re.finditer(
+                        r"checked\s+seat\s*(\d+)[^.;]*?night\s*(\d+)",
+                        text, re.I):
+                    self.claim_night_checks.append(
+                        (seat, int(m.group(2)), int(m.group(1))))
             if DOCTOR_CLAIM_RE.search(text):
                 self.doctor_claimants.add(seat)
 
@@ -315,6 +326,19 @@ class GameState:
                     scores[voter] -= 1.2   # helped exile a werewolf
             if voter in wolves_dead and target in scores:
                 scores[target] -= 0.4      # a known wolf voted them: village-lean
+        # Pack voting: a living player who voted the same villager out on
+        # the same day as a revealed werewolf was hunting with the pack,
+        # whether or not they knew the company they were keeping.
+        for (d, seat, role) in self.exiles:
+            if role != "villager":
+                continue
+            pack = {v for (vd, v, t) in self.votes
+                    if vd == d and t == seat and v in wolves_dead}
+            if not pack:
+                continue
+            for (vd, v, t) in self.votes:
+                if vd == d and t == seat and v in scores and v not in pack:
+                    scores[v] += 0.5
         # Defending a revealed wolf in speech.
         for (_d, s, text) in self.speeches:
             if s not in scores:
@@ -422,6 +446,21 @@ class GameState:
                         state = "discredited"
                         break
             status[seat] = state
+        # A check claimed for a night on which the checked seat was
+        # already dead is impossible -- the dead take no inspections.
+        # (A check on the very night the seat died, or on the day it was
+        # exiled, is legitimate: the inspection and the death land
+        # together.) Only an explicit "night N ... checked seat X"
+        # statement is judged, so loose talk is never punished.
+        for (c, n, t) in self.claim_night_checks:
+            if c not in status or status[c] == "discredited":
+                continue
+            dead_first = any(died == t and dd < n
+                             for (dd, died, _r) in self.dawns)
+            exiled_first = any(seat == t and dd < n
+                               for (dd, seat, _r) in self.exiles)
+            if dead_first or exiled_first:
+                status[c] = "discredited"
         return status
 
     def credible_claimant(self):
@@ -465,12 +504,34 @@ def decide_kill(st, options):
             t = v.get("target")
             if t in opts:
                 return t
+    # A kill that met the doctor last night should simply be repeated:
+    # the doctor may not guard the same seat two nights running, so a
+    # target who survived our agreed kill (nobody died at dawn) is
+    # tonight's guaranteed opening -- above all when it is the claimed
+    # seer, whose guard is exactly why the first attempt failed.
+    if st.day >= 2:
+        prev = [v for v in st.wolf_votes
+                if v.get("night") == st.day - 1
+                and v.get("target") is not None]
+        last_dawn = [died for (dd, died, _r) in st.dawns if dd == st.day - 1]
+        if prev and last_dawn and last_dawn[0] is None:
+            mine = [v.get("target") for v in prev if v.get("seat") == st.me]
+            repeat = (mine or [v.get("target") for v in prev])[0]
+            if repeat in opts:
+                return repeat
     scores = st.suspicion()
     best, best_key = None, None
     for s in opts:
         key = 0.0
         if s in st.seer_claims:
             key += 6.0                    # a claimed seer is the top target
+        if st.i_claimed_seer():
+            mine = st.my_claimed_results()
+            if s in mine["clear"]:
+                key -= 6.0   # my own "cleared" player: killing them at
+                             # night guts the story I am selling by day
+            if s in mine["wolf"]:
+                key -= 6.0   # my accused must face the vote, not the knife
         key += 0.55 * st.speech_count(s)  # talkative village leaders
         key += 0.9 * sum(1 for (_d, v, t) in st.votes
                          if t is not None and st.revealed(t) == "werewolf"
@@ -654,6 +715,15 @@ def decide_vote_wolf(st, options):
     # A seer named me: vote the claimant to fight the claim.
     if claimant is not None and st.me in named_wolves and claimant in opts:
         return claimant
+    # I am wearing the seer's coat myself: my vote must land on the
+    # werewolf I named, or the table sees the claim and the vote
+    # disagree -- and a "seer" who will not vote their own call is read
+    # as a costume, not a seer.
+    if st.i_claimed_seer():
+        mine = st.my_claimed_results()
+        for s in sorted(mine["wolf"]):
+            if s in opts and st.alive(s):
+                return s
     # Partner named by a seer and the bandwagon is already rolling: bus them.
     if partner is not None and partner in opts:
         if partner in named_wolves and tally.get(partner, 0) >= 2:
@@ -836,37 +906,58 @@ def _fake_seer_results(st, force_wolf=None):
     """Fabricated seer results for a werewolf, derived from public state.
 
     'Not a werewolf' claims name real non-werewolves (always safe), and the
-    single 'werewolf' claim names the village player this wolf most wants
-    exiled. If I already fake-claimed, reuse the same names so the story
-    never changes. force_wolf pins the accused seat (a counter-claim names
-    the rival claimant), unless an earlier claim of mine already fixed it.
+    'werewolf' claim names the village player this wolf most wants
+    exiled. If I already fake-claimed, the names I gave stay fixed while
+    their seats live -- a seer's story never changes. Once my accused is
+    dead, last night's "check" produces a fresh one: never my partner,
+    never a seat I have cleared (a seer does not contradict their own
+    record). force_wolf pins the accused seat (a counter-claim names the
+    rival claimant), unless an earlier claim of mine already fixed it.
     """
     mine = st.my_claimed_results()
-    if mine["wolf"]:
-        wolf_pick = sorted(mine["wolf"])[0]
-        clears = sorted(mine["clear"])
-        return wolf_pick, clears
     non_wolves = [s for s in st.living()
                   if s != st.me and s != st.partner]
     if not non_wolves:
-        return None, []
-    if force_wolf is not None and force_wolf in non_wolves:
-        target = force_wolf
-    else:
-        target = _top_suspect(st, set())
-    if target is None or target == st.partner or target not in non_wolves:
-        target = non_wolves[0]
-    dead_villagers = [s for (d, s, r) in st.dawns if r not in (None, "werewolf")]
-    dead_villagers += [s for (d, s, r) in st.exiles if r == "villager"]
-    clears = []
-    for s in dead_villagers:
-        if s not in clears:
-            clears.append(s)
+        return None, sorted(mine["clear"])
+    wolf_pick = None
+    for s in sorted(mine["wolf"]):
+        if st.alive(s):
+            wolf_pick = s
+            break
+    if wolf_pick is None:
+        if force_wolf is not None and force_wolf in non_wolves \
+                and force_wolf not in mine["clear"]:
+            wolf_pick = force_wolf
+        else:
+            excluded = set(mine["clear"])
+            if st.partner is not None:
+                excluded.add(st.partner)
+            wolf_pick = _top_suspect(st, excluded)
+            if wolf_pick is None or wolf_pick not in non_wolves \
+                    or wolf_pick in mine["clear"]:
+                pool = [s for s in non_wolves if s not in mine["clear"]]
+                wolf_pick = pool[0] if pool else non_wolves[0]
+    clears = sorted(mine["clear"])
     if not clears:
-        others = [s for s in non_wolves if s != target]
-        if others:
-            clears.append(others[0])
-    return target, clears[:2]
+        dead_villagers = [s for (d, s, r) in st.dawns
+                          if r not in (None, "werewolf")]
+        dead_villagers += [s for (d, s, r) in st.exiles if r == "villager"]
+        for s in dead_villagers:
+            if s not in clears:
+                clears.append(s)
+        if not clears:
+            others = [s for s in non_wolves if s != wolf_pick]
+            if others:
+                clears.append(others[0])
+    if st.day >= 3 and len(clears) < 2:
+        # A living "confirmed town" is worth more than a dead one: they
+        # vote, and a record with a living clear looks worked-for rather
+        # than convenient. Any living non-werewolf is a safe name.
+        for s in non_wolves:
+            if s != wolf_pick and s not in clears:
+                clears.append(s)
+                break
+    return wolf_pick, clears[:2]
 
 
 def speech_wolf(st):
@@ -882,11 +973,13 @@ def speech_wolf(st):
     i_named = claimant is not None and st.me in named_wolves
 
     if (not claimed_fake and st.day >= 2 and claimant is None
-            and not st.other_seer_claimants() and partner is not None
-            and st.alive(partner)):
+            and not st.other_seer_claimants()):
         # No seer has shown themselves by day 2: take the coat first.
         # The village follows the first claim it hears, and a fabricated
-        # record costs nothing until a real seer stands up.
+        # record costs nothing until a real seer stands up. This holds
+        # with a live partner -- and it holds twice over when the partner
+        # is already exiled: a lone wolf has no quieter path home than
+        # steering the exiles themselves, one named "werewolf" at a time.
         wolf_pick, clears = _fake_seer_results(st)
         if wolf_pick is not None:
             clear_txt = ""
@@ -898,15 +991,30 @@ def speech_wolf(st):
                         % (clear_txt, wolf_pick, wolf_pick))
     if claimed_fake:
         wolf_pick, clears = _fake_seer_results(st)
+        mine = st.my_claimed_results()
+        clear_txt = ""
+        if clears:
+            clear_txt = (" My record: " + "; ".join(
+                "seat %d is not a werewolf" % c for c in clears) + ".")
         if wolf_pick is not None and st.alive(wolf_pick):
-            return fold("I am the seer, as I said. Seat %d is a werewolf, "
-                        "my checks do not lie. Vote seat %d."
-                        % (wolf_pick, wolf_pick))
-        return fold("I am the seer. My cleared players have not steered "
-                    "us wrong; follow the votes I called for.")
+            if wolf_pick in mine["wolf"]:
+                return fold("I am the seer, as I said.%s Seat %d is a "
+                            "werewolf; my checks do not lie. Vote seat %d."
+                            % (clear_txt, wolf_pick, wolf_pick))
+            # The old accused is gone; a working seer brings a fresh
+            # result, not a repeated one.
+            return fold("I am the seer, as I said.%s Last night I checked "
+                        "seat %d: a werewolf. Vote seat %d."
+                        % (clear_txt, wolf_pick, wolf_pick))
+        return fold("I am the seer.%s Follow the votes I called for."
+                    % clear_txt)
     if i_named or (accused and st.day >= 2 and claimant is None):
-        # Cornered: counter-claim seer with a fabricated record.
-        wolf_pick, clears = _fake_seer_results(st)
+        # Cornered: counter-claim seer with a fabricated record. When a
+        # claimant has named me, my "check" names them right back: the
+        # village must choose between two seers, and a counter-claim that
+        # accuses a third party leaves the real claim standing.
+        wolf_pick, clears = _fake_seer_results(
+            st, force_wolf=claimant if i_named else None)
         if wolf_pick is not None:
             clear_txt = ""
             if clears:
